@@ -1,0 +1,85 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+
+trigger:
+- main
+- qa
+- dev
+
+pool:
+  name: BroxelAgentPools
+  demands: Agent.Name -equals MaxStudioM2Max
+
+variables:
+  major: 1
+  minor: 0
+
+name: $(major).$(minor)$(Rev:.rr)
+
+steps:
+
+- task: DownloadSecureFile@1
+  inputs:
+    secureFile: 'broxel-logs-dev-4942e4cdb460.json'
+
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(Agent.TempDirectory)'
+    Contents: '**'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+- task: UseDotNet@2
+  displayName: 'Use .NET Core sdk 8.x'
+  inputs:
+    version: 8.x
+
+- task: Bash@3
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Write your commands here
+
+      ls -alh
+
+      cat $(Build.ArtifactStagingDirectory)/broxel-logs-dev-4942e4cdb460.json
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore'
+  inputs:
+    command: 'restore'
+    projects: '**/*.csproj'
+    feedsToUse: 'select'
+    vstsFeed: '3b1c74b4-cbbc-4624-8bc8-f7006cd888a0'
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build'
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+    arguments: '-o $(Build.ArtifactStagingDirectory) -p:PackageVersion=$(Build.BuildNumber) --no-restore'
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: drop'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'broxel-logger-web'  
+
+#- task: Bash@3
+#  inputs:
+#    targetType: 'inline'
+#    script: |
+#      # Write your commands here
+#      ls -alh
+#      cat $(Build.ArtifactStagingDirectory)/broxel-logs-dev-4942e4cdb460.json
+#      dotnet nuget sign $(Build.ArtifactStagingDirectory)  --certificate-path $(Build.ArtifactStagingDirectory)/broxel-logs-dev-4942e4cdb460.json
+#  displayName: 'Sign NuGet Package with GCP Service Account'
+
+- task: NuGetCommand@2
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
+    nuGetFeedType: 'internal'
+    publishVstsFeed: '3b1c74b4-cbbc-4624-8bc8-f7006cd888a0'
